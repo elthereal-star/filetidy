@@ -1,0 +1,26 @@
+# 内置默认规则：按扩展名把下载目录里的文件归入带序号的中文文件夹。
+# 用户可用 -c/--config 指定自己的 YAML 覆盖。
+rules:
+  - name: images
+    target: 01-图片
+    extensions: [jpg, jpeg, png, gif, webp, bmp, svg, ico]
+  - name: documents
+    target: 02-文档
+    extensions: [pdf, doc, docx, xls, xlsx, ppt, pptx, txt, md, csv]
+  - name: archives
+    target: 03-压缩包
+    extensions: [zip, rar, 7z, tar, gz]
+  - name: installers
+    target: 04-安装包
+    extensions: [exe, msi, dmg, pkg, apk]
+  - name: videos
+    target: 05-视频
+    extensions: [mp4, mkv, avi, mov, flv, webm]
+  - name: audio
+    target: 06-音频
+    extensions: [mp3, wav, flac, m4a, ogg]
+  - name: code
+    target: 07-代码
+    extensions: [java, py, js, ts, html, css, json, xml, sql, jar]
+fallback: 99-其他
+skipHidden: true
