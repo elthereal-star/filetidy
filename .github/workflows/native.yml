@@ -1,0 +1,169 @@
+name: native
+
+# 原生可执行文件（GraalVM native image）的独立流水线。
+# 单独拆一个 workflow 而不是塞进 ci.yml：native 构建要几分钟，还要 GraalVM 工具链，
+# 不该拖慢每次提交的基础校验；只有改动会影响原生镜像的文件时才跑。
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/native.yml'
+      - 'pom.xml'
+      - 'src/main/java/**'
+      - 'src/main/resources/**'
+  pull_request:
+    paths:
+      - '.github/workflows/native.yml'
+      - 'pom.xml'
+      - 'src/main/java/**'
+      - 'src/main/resources/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # PR 上只跑 Linux，手动触发或合并到 main 时才铺开三个平台。
+  # 理由：反射/资源没注册这类问题在任何平台都是同一个原因，一个平台几分钟就能发现；
+  # 平台差异（链接器、AWT 支持）留给全量构建兜住。
+  plan:
+    name: 决定构建哪些平台
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.pick.outputs.platforms }}
+    steps:
+      - id: pick
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo 'platforms=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'platforms=["ubuntu-latest","windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  build-native:
+    name: native (${{ matrix.os }})
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      # 一个平台挂了也让其他平台跑完，免得最后只看到一个平台的结论
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.platforms) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up GraalVM for JDK 21
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+
+      - name: Print toolchain versions
+        run: |
+          java -version
+          native-image --version
+          mvn -version
+
+      - name: Build native image
+        run: mvn -B -ntp -Pnative package -DskipTests
+
+      # 真跑一遍原生可执行文件，而不是只看构建是否成功。
+      # 覆盖 SnakeYAML（解析配置）、规则引擎、历史记录读写（Jackson）、
+      # 内置规则资源（rules-default.yml），以及错误提示与退出码约定。
+      - name: Smoke test the native binary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BIN="target/filetidy"
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            BIN="target/filetidy.exe"
+          fi
+          echo "使用二进制: $BIN"
+          test -f "$BIN"
+
+          echo "==> --version"
+          "$BIN" --version
+
+          work="$(mktemp -d)"
+          inbox="$work/inbox"
+          mkdir -p "$inbox"
+
+          # 目标文件夹名用纯 ASCII，避免各平台路径编码差异干扰断言
+          printf '%s\n' \
+            'rules:' \
+            '  - name: images' \
+            '    target: 01-images' \
+            '    extensions: [png, jpg]' \
+            '  - name: docs' \
+            '    target: 02-docs' \
+            '    extensions: [pdf, txt]' \
+            'fallback: 99-other' \
+            'skipHidden: true' > "$work/rules.yml"
+
+          printf 'png'  > "$inbox/photo.png"
+          printf 'jpg'  > "$inbox/cover.jpg"
+          printf 'pdf'  > "$inbox/report.pdf"
+          printf 'none' > "$inbox/mystery.xyz"
+
+          echo "==> config：读内置 rules-default.yml，验证资源确实打进了镜像"
+          "$BIN" config > /dev/null
+
+          echo "==> organize --dry-run：预览模式不应移动任何文件"
+          "$BIN" organize "$inbox" -c "$work/rules.yml" --dry-run
+          test -f "$inbox/photo.png"
+
+          echo "==> organize：真实整理"
+          "$BIN" organize "$inbox" -c "$work/rules.yml"
+          test -f "$inbox/01-images/photo.png"
+          test -f "$inbox/01-images/cover.jpg"
+          test -f "$inbox/02-docs/report.pdf"
+          test -f "$inbox/99-other/mystery.xyz"
+
+          echo "==> undo --list：读历史批次，验证 Jackson 反序列化"
+          "$BIN" undo "$inbox" --list
+          test -f "$inbox/.filetidy-history.jsonl"
+
+          echo "==> undo：撤销回原位"
+          "$BIN" undo "$inbox"
+          test -f "$inbox/photo.png"
+          test -f "$inbox/report.pdf"
+          test ! -e "$inbox/01-images/photo.png"
+
+          # 断言里只放 ASCII（文件名），不依赖中文输出的编码，避免无谓的平台假失败
+          echo "==> 可预期错误：友好的单行提示 + 退出码 1"
+          set +e
+          message="$("$BIN" organize "$inbox" -c "$work/nope.yml" 2>&1)"
+          expected_error=$?
+          set -e
+          echo "$message"
+          test "$expected_error" -eq 1
+          grep -q 'nope.yml' <<<"$message"
+
+          echo "==> 参数错误：退出码 2"
+          set +e
+          "$BIN" organize > /dev/null 2>&1
+          usage_error=$?
+          set -e
+          test "$usage_error" -eq 2
+
+          echo "原生镜像端到端冒烟通过"
+
+      - name: Upload native binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: filetidy-native-${{ matrix.os }}
+          path: |
+            target/filetidy
+            target/filetidy.exe
+          if-no-files-found: error

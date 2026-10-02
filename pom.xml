@@ -13,13 +13,16 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <picocli.version>4.7.6</picocli.version>
+        <junit.version>5.10.3</junit.version>
+        <native.plugin.version>1.1.14</native.plugin.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
-            <version>4.7.6</version>
+            <version>${picocli.version}</version>
         </dependency>
         <dependency>
             <groupId>org.yaml</groupId>
@@ -34,7 +37,7 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.10.3</version>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -69,4 +72,60 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            原生可执行文件的构建配置，默认不参与构建；用 -Pnative 显式开启：
+                mvn -Pnative package
+            需要 GraalVM JDK（含 native-image 工具），见 README「原生可执行文件」一节。
+        -->
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <!--
+                                picocli-codegen 在编译期扫描 @Command 类，把编译好的
+                                反射配置写进 target/classes/META-INF/native-image/，
+                                原生镜像构建时自动读取，省去手写几十条反射注册。
+                            -->
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>info.picocli</groupId>
+                                    <artifactId>picocli-codegen</artifactId>
+                                    <version>${picocli.version}</version>
+                                </path>
+                            </annotationProcessorPaths>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native.plugin.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>filetidy</imageName>
+                            <mainClass>dev.filetidy.Main</mainClass>
+                            <!--
+                                构建参数放在 src/main/resources/META-INF/native-image/dev.filetidy/filetidy/native-image.properties，
+                                这样用 gradle 或直接跑 native-image 时也是同一套参数。
+                            -->
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

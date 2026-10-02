@@ -1,9 +1,15 @@
 # 内置默认规则：按扩展名把下载目录里的文件归入带序号的中文文件夹。
 # 用户可用 -c/--config 指定自己的 YAML 覆盖。
+#
+# 下面这些可选能力默认是关掉的：需要时把对应的几行取消注释即可。
+#   datePattern  命中后再按修改时间分一层日期目录，例如 01-图片/2026-08/
+#   largeFiles   达到阈值的大文件不再按扩展名归类，直接进 90-大文件
+#   duplicates   内容重复的文件只报告（report），或把多余副本挪进 98-重复文件（move）
 rules:
   - name: images
     target: 01-图片
     extensions: [jpg, jpeg, png, gif, webp, bmp, svg, ico]
+    # datePattern: yyyy-MM
   - name: documents
     target: 02-文档
     extensions: [pdf, doc, docx, xls, xlsx, ppt, pptx, txt, md, csv]
@@ -24,3 +30,12 @@ rules:
     extensions: [java, py, js, ts, html, css, json, xml, sql, jar]
 fallback: 99-其他
 skipHidden: true
+
+# largeFiles:
+#   threshold: 100MB        # 支持 500k / 1.5GB / 100MB 这类写法
+#   target: 90-大文件
+
+# duplicates:
+#   action: report          # report 只报告；move 把多余副本挪走
+#   keep: oldest            # oldest 留最早的；newest 留最新的
+#   target: 98-重复文件      # action 为 move 时必填

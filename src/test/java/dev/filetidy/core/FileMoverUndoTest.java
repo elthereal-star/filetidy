@@ -27,7 +27,7 @@ class FileMoverUndoTest {
         FileMover mover = new FileMover();
 
         List<MovePlan> plans = engine.plan(dir);
-        mover.execute(plans);
+        mover.execute(dir, plans);
 
         assertFalse(Files.exists(dir.resolve("a.png")));
         assertTrue(Files.exists(dir.resolve("01-图片").resolve("a.png")));
@@ -49,7 +49,7 @@ class FileMoverUndoTest {
         Files.writeString(dir.resolve("a.png"), "new");
 
         RuleEngine engine = new RuleEngine(TidyConfig.defaultConfig());
-        new FileMover().execute(engine.plan(dir));
+        new FileMover().execute(dir, engine.plan(dir));
 
         assertEquals("old", Files.readString(imagesDir.resolve("a.png")));
         assertEquals("new", Files.readString(imagesDir.resolve("a (1).png")));

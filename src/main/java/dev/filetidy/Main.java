@@ -1,5 +1,6 @@
 package dev.filetidy;
 
+import dev.filetidy.util.Ansi;
 import dev.filetidy.util.ConsoleOutput;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -10,7 +11,8 @@ import java.io.PrintWriter;
         mixinStandardHelpOptions = true,
         version = "0.1.0",
         description = "按规则自动整理文件夹的命令行小工具",
-        subcommands = {OrganizeCommand.class, UndoCommand.class})
+        subcommands = {OrganizeCommand.class, UndoCommand.class, ConfigCommand.class,
+                TrayCommand.class, AutostartCommand.class})
 public class Main implements Runnable {
 
     /** 正常结束 */
@@ -30,6 +32,7 @@ public class Main implements Runnable {
 
     public static void main(String[] args) {
         ConsoleOutput.install();
+        Ansi.install();
         System.exit(createCommandLine().execute(args));
     }
 
@@ -51,11 +54,11 @@ public class Main implements Runnable {
         public int handleExecutionException(Exception ex, CommandLine commandLine, CommandLine.ParseResult parseResult) {
             PrintWriter err = commandLine.getErr();
             if (ex instanceof FiletidyException known) {
-                err.println("错误: " + known.getMessage());
+                err.println(Ansi.error("错误: " + known.getMessage()));
                 err.println("提示: 用 --help 查看用法。");
             } else {
-                err.println("错误: 发生未预期的异常（" + ex.getClass().getSimpleName()
-                        + (ex.getMessage() == null ? "" : ": " + ex.getMessage()) + "）");
+                err.println(Ansi.error("错误: 发生未预期的异常（" + ex.getClass().getSimpleName()
+                        + (ex.getMessage() == null ? "" : ": " + ex.getMessage()) + "）"));
                 if (debugEnabled()) {
                     ex.printStackTrace(err);
                 } else {
