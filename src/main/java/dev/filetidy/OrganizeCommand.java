@@ -13,7 +13,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-@Command(name = "organize", description = "按规则整理目录中的文件")
+@Command(name = "organize",
+        mixinStandardHelpOptions = true,
+        description = "按规则整理目录中的文件")
 public class OrganizeCommand implements Callable<Integer> {
 
     @Parameters(index = "0", description = "要整理的目录")
@@ -30,6 +32,9 @@ public class OrganizeCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        if (dryRun && watch) {
+            throw new FiletidyException("--dry-run 与 --watch 不能同时使用：预览模式下不会真正移动文件，无需监听。");
+        }
         TidyConfig tidyConfig = config != null ? TidyConfig.load(config) : TidyConfig.defaultConfig();
         RuleEngine engine = new RuleEngine(tidyConfig);
         FileMover mover = new FileMover();
@@ -39,6 +44,7 @@ public class OrganizeCommand implements Callable<Integer> {
             System.out.println("没有需要整理的文件");
         } else if (dryRun) {
             plans.forEach(plan -> System.out.println("[dry-run] " + plan));
+            System.out.println("共 " + plans.size() + " 个文件待整理（预览模式，未做任何改动）");
         } else {
             mover.execute(plans);
             System.out.println("已整理 " + plans.size() + " 个文件");
@@ -47,6 +53,6 @@ public class OrganizeCommand implements Callable<Integer> {
         if (watch) {
             new FolderWatcher(engine, mover).watch(directory);
         }
-        return 0;
+        return Main.EXIT_OK;
     }
 }

@@ -1,5 +1,6 @@
 package dev.filetidy.core;
 
+import dev.filetidy.FiletidyException;
 import dev.filetidy.config.TidyConfig;
 
 import java.io.IOException;
@@ -22,8 +23,8 @@ public class RuleEngine {
     }
 
     public List<MovePlan> plan(Path directory) throws IOException {
-        if (!Files.isDirectory(directory)) {
-            throw new IllegalArgumentException("不是有效目录: " + directory);
+        if (directory == null || !Files.isDirectory(directory)) {
+            throw new FiletidyException("目录不存在或不是目录: " + directory);
         }
         List<MovePlan> plans = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
@@ -31,16 +32,26 @@ public class RuleEngine {
                 if (!Files.isRegularFile(file)) {
                     continue;
                 }
-                if (config.isSkipHidden() && Files.isHidden(file)) {
+                if (HistoryStore.FILE_NAME.equals(file.getFileName().toString())) {
                     continue;
                 }
-                if (HistoryStore.FILE_NAME.equals(file.getFileName().toString())) {
+                if (config.isSkipHidden() && isHidden(file)) {
                     continue;
                 }
                 plans.add(new MovePlan(file, directory.resolve(targetFolder(file)).resolve(file.getFileName()), ruleName(file)));
             }
         }
         return plans;
+    }
+
+    /**
+     * 判断是否为隐藏文件。
+     * <p>
+     * Unix 上点文件天然隐藏，而 Windows 的 {@link Files#isHidden} 只看 DOS 隐藏属性，
+     * 若只依赖它，同一份配置在两个平台上行为不一致。这里统一为「点文件或系统隐藏属性」。
+     */
+    static boolean isHidden(Path file) throws IOException {
+        return file.getFileName().toString().startsWith(".") || Files.isHidden(file);
     }
 
     private String ruleName(Path file) {
