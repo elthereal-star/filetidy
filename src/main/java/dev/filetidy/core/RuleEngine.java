@@ -7,16 +7,29 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
- * 只扫描目录第一层（不递归），避免把已归档到子文件夹的文件再次移动。
+ * 生成整理计划：只扫描目录第一层（不递归），避免把已归档到子文件夹的文件再次移动。
+ * <p>
+ * 判定优先级：大文件分流 → 扩展名规则 → fallback。
  */
 public class RuleEngine {
 
+    /** 命中大文件分流时记录在计划里的规则名。 */
+    public static final String LARGE_FILES_RULE = "large-files";
+    /** 未命中任何扩展名规则时的规则名。 */
+    public static final String FALLBACK_RULE = "fallback";
+
     private final TidyConfig config;
+    private final Map<String, DateTimeFormatter> dateFormatters = new HashMap<>();
 
     public RuleEngine(TidyConfig config) {
         this.config = config;
@@ -38,10 +51,47 @@ public class RuleEngine {
                 if (config.isSkipHidden() && isHidden(file)) {
                     continue;
                 }
-                plans.add(new MovePlan(file, directory.resolve(targetFolder(file)).resolve(file.getFileName()), ruleName(file)));
+                plans.add(planFor(directory, file));
             }
         }
         return plans;
+    }
+
+    private MovePlan planFor(Path directory, Path file) throws IOException {
+        if (config.largeFilesEnabled() && Files.size(file) >= config.getLargeFiles().thresholdBytes()) {
+            TidyConfig.LargeFiles largeFiles = config.getLargeFiles();
+            Path target = directory.resolve(largeFiles.getTarget()).resolve(file.getFileName());
+            return new MovePlan(file, target, LARGE_FILES_RULE);
+        }
+        TidyConfig.Rule rule = matchRule(file);
+        if (rule == null) {
+            Path target = directory.resolve(config.getFallback()).resolve(file.getFileName());
+            return new MovePlan(file, target, FALLBACK_RULE);
+        }
+        Path targetDir = directory.resolve(rule.getTarget());
+        String datePattern = rule.getDatePattern();
+        if (datePattern != null && !datePattern.isBlank()) {
+            targetDir = targetDir.resolve(formatDate(file, datePattern.trim()));
+        }
+        return new MovePlan(file, targetDir.resolve(file.getFileName()), rule.getName());
+    }
+
+    /** 按扩展名匹配规则，未命中返回 {@code null}。 */
+    TidyConfig.Rule matchRule(Path file) {
+        String extension = extensionOf(file);
+        for (TidyConfig.Rule rule : config.getRules()) {
+            if (rule.getExtensions().stream().anyMatch(ext -> ext.equalsIgnoreCase(extension))) {
+                return rule;
+            }
+        }
+        return null;
+    }
+
+    /** 用文件最后修改时间按 pattern 生成日期子目录名。 */
+    private String formatDate(Path file, String pattern) throws IOException {
+        DateTimeFormatter formatter = dateFormatters.computeIfAbsent(pattern, DateTimeFormatter::ofPattern);
+        ZonedDateTime modified = Files.getLastModifiedTime(file).toInstant().atZone(ZoneId.systemDefault());
+        return formatter.format(modified);
     }
 
     /**
@@ -52,26 +102,6 @@ public class RuleEngine {
      */
     static boolean isHidden(Path file) throws IOException {
         return file.getFileName().toString().startsWith(".") || Files.isHidden(file);
-    }
-
-    private String ruleName(Path file) {
-        String extension = extensionOf(file);
-        for (TidyConfig.Rule rule : config.getRules()) {
-            if (rule.getExtensions().stream().anyMatch(ext -> ext.equalsIgnoreCase(extension))) {
-                return rule.getName();
-            }
-        }
-        return "fallback";
-    }
-
-    private String targetFolder(Path file) {
-        String name = ruleName(file);
-        for (TidyConfig.Rule rule : config.getRules()) {
-            if (rule.getName().equals(name)) {
-                return rule.getTarget();
-            }
-        }
-        return config.getFallback();
     }
 
     static String extensionOf(Path file) {
