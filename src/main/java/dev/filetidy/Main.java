@@ -1,5 +1,6 @@
 package dev.filetidy;
 
+import dev.filetidy.util.ConsoleOutput;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
@@ -16,6 +17,7 @@ public class Main implements Runnable {
     }
 
     public static void main(String[] args) {
+        ConsoleOutput.install();
         System.exit(new CommandLine(new Main()).execute(args));
     }
 }
