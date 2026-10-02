@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class UndoService {
 
@@ -18,6 +21,13 @@ public class UndoService {
      * 原样保留，方便用户处理掉冲突后重试。
      */
     public UndoResult undoLastRun(Path directory) throws IOException {
+        return undoLastRun(directory, false);
+    }
+
+    /**
+     * @param dryRun 为 true 时只统计会发生什么，不移动文件也不改历史
+     */
+    public UndoResult undoLastRun(Path directory, boolean dryRun) throws IOException {
         List<HistoryEntry> entries = historyStore.read(directory);
         if (entries.isEmpty()) {
             return UndoResult.EMPTY;
@@ -38,16 +48,42 @@ public class UndoService {
                 skipped++;
                 continue;
             }
+            undone.add(entry);
+            if (dryRun) {
+                continue;
+            }
             Path parent = original.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
             Files.move(current, original);
             pruneEmptiedFolders(current.getParent(), base);
-            undone.add(entry);
         }
-        historyStore.removeEntries(directory, undone);
+        if (!dryRun) {
+            historyStore.removeEntries(directory, undone);
+        }
         return new UndoResult(undone.size(), skipped);
+    }
+
+    /** 列出历史批次，按发生顺序排列（最早的在前面）。 */
+    public List<RunSummary> listRuns(Path directory) throws IOException {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (HistoryEntry entry : historyStore.read(directory)) {
+            counts.merge(entry.runId(), 1, Integer::sum);
+        }
+        List<RunSummary> runs = new ArrayList<>(counts.size());
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            runs.add(new RunSummary(entry.getKey(), parseTime(entry.getKey()), entry.getValue()));
+        }
+        return runs;
+    }
+
+    private Instant parseTime(String runId) {
+        try {
+            return Instant.ofEpochMilli(Long.parseLong(runId));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

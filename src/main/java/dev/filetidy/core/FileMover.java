@@ -12,18 +12,27 @@ public class FileMover {
 
     private final HistoryStore historyStore = new HistoryStore();
 
-    public void execute(List<MovePlan> plans) throws IOException {
-        if (plans.isEmpty()) {
-            return;
+    /**
+     * 按计划移动文件，同时把移动记录追加进 {@code directory} 下的历史文件。
+     *
+     * @param directory 被整理的目录，历史记录写在这里
+     * @param plans     计划列表
+     * @return 实际移动的文件数量
+     */
+    public int execute(Path directory, List<MovePlan> plans) throws IOException {
+        if (plans == null || plans.isEmpty()) {
+            return 0;
         }
         String runId = String.valueOf(System.currentTimeMillis());
-        Path directory = plans.getFirst().source().getParent();
+        int moved = 0;
         for (MovePlan plan : plans) {
             Files.createDirectories(plan.target().getParent());
             Path resolvedTarget = resolveConflict(plan.target());
             Files.move(plan.source(), resolvedTarget);
             historyStore.append(directory, new HistoryEntry(runId, plan.source().toString(), resolvedTarget.toString()));
+            moved++;
         }
+        return moved;
     }
 
     /**

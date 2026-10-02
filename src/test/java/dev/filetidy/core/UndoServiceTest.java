@@ -19,7 +19,7 @@ class UndoServiceTest {
 
     private void organize() throws IOException {
         RuleEngine engine = new RuleEngine(TidyConfig.defaultConfig());
-        new FileMover().execute(engine.plan(dir));
+        new FileMover().execute(dir, engine.plan(dir));
     }
 
     @Test
