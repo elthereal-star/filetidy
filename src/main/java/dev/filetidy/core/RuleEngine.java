@@ -35,13 +35,23 @@ public class RuleEngine {
                 if (HistoryStore.FILE_NAME.equals(file.getFileName().toString())) {
                     continue;
                 }
-                if (config.isSkipHidden() && Files.isHidden(file)) {
+                if (config.isSkipHidden() && isHidden(file)) {
                     continue;
                 }
                 plans.add(new MovePlan(file, directory.resolve(targetFolder(file)).resolve(file.getFileName()), ruleName(file)));
             }
         }
         return plans;
+    }
+
+    /**
+     * 判断是否为隐藏文件。
+     * <p>
+     * Unix 上点文件天然隐藏，而 Windows 的 {@link Files#isHidden} 只看 DOS 隐藏属性，
+     * 若只依赖它，同一份配置在两个平台上行为不一致。这里统一为「点文件或系统隐藏属性」。
+     */
+    static boolean isHidden(Path file) throws IOException {
+        return file.getFileName().toString().startsWith(".") || Files.isHidden(file);
     }
 
     private String ruleName(Path file) {
