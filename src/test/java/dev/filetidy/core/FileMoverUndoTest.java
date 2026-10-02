@@ -33,9 +33,10 @@ class FileMoverUndoTest {
         assertTrue(Files.exists(dir.resolve("01-图片").resolve("a.png")));
         assertTrue(Files.exists(dir.resolve("03-压缩包").resolve("b.zip")));
 
-        int undone = new UndoService().undoLastRun(dir);
+        UndoResult result = new UndoService().undoLastRun(dir);
 
-        assertEquals(2, undone);
+        assertEquals(2, result.undone());
+        assertEquals(0, result.skipped());
         assertTrue(Files.exists(dir.resolve("a.png")));
         assertTrue(Files.exists(dir.resolve("b.zip")));
     }
