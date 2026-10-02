@@ -1,5 +1,6 @@
 package dev.filetidy.core;
 
+import dev.filetidy.FiletidyException;
 import dev.filetidy.config.TidyConfig;
 
 import java.io.IOException;
@@ -22,8 +23,8 @@ public class RuleEngine {
     }
 
     public List<MovePlan> plan(Path directory) throws IOException {
-        if (!Files.isDirectory(directory)) {
-            throw new IllegalArgumentException("不是有效目录: " + directory);
+        if (directory == null || !Files.isDirectory(directory)) {
+            throw new FiletidyException("目录不存在或不是目录: " + directory);
         }
         List<MovePlan> plans = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
@@ -31,10 +32,10 @@ public class RuleEngine {
                 if (!Files.isRegularFile(file)) {
                     continue;
                 }
-                if (config.isSkipHidden() && Files.isHidden(file)) {
+                if (HistoryStore.FILE_NAME.equals(file.getFileName().toString())) {
                     continue;
                 }
-                if (HistoryStore.FILE_NAME.equals(file.getFileName().toString())) {
+                if (config.isSkipHidden() && Files.isHidden(file)) {
                     continue;
                 }
                 plans.add(new MovePlan(file, directory.resolve(targetFolder(file)).resolve(file.getFileName()), ruleName(file)));
