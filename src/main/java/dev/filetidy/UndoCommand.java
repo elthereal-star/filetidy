@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
-@Command(name = "undo", description = "撤销上一次整理（按整理记录反向移动回来）")
+@Command(name = "undo",
+        mixinStandardHelpOptions = true,
+        description = "撤销上一次整理（按整理记录反向移动回来）")
 public class UndoCommand implements Callable<Integer> {
 
     @Parameters(index = "0", description = "之前整理过的目录")

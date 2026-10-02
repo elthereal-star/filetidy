@@ -98,6 +98,15 @@ class CliTest {
     }
 
     @Test
+    void subcommandsSupportHelpWithoutPositionalArgument() {
+        assertEquals(Main.EXIT_OK, run("organize", "--help"));
+        assertTrue(out().contains("--dry-run"), out());
+
+        assertEquals(Main.EXIT_OK, run("undo", "--help"));
+        assertTrue(out().contains("撤销"), out());
+    }
+
+    @Test
     void undoOnUntidiedDirectoryIsNotAnError() {
         assertEquals(Main.EXIT_OK, run("undo", dir.toString()));
         assertTrue(out().contains("没有可撤销的记录"), out());

@@ -13,7 +13,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-@Command(name = "organize", description = "按规则整理目录中的文件")
+@Command(name = "organize",
+        mixinStandardHelpOptions = true,
+        description = "按规则整理目录中的文件")
 public class OrganizeCommand implements Callable<Integer> {
 
     @Parameters(index = "0", description = "要整理的目录")
