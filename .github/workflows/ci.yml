@@ -3,8 +3,9 @@ name: ci
 on:
   push:
     branches: [ main ]
+  # 不加 branches 过滤：堆叠 PR（base 是另一个特性分支而不是 main）同样需要校验，
+  # 否则在 #1 合并之前，后面这串 PR 会处在无人验证的状态。
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
