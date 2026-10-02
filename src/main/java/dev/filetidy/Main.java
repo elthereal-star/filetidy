@@ -11,7 +11,8 @@ import java.io.PrintWriter;
         mixinStandardHelpOptions = true,
         version = "0.1.0",
         description = "按规则自动整理文件夹的命令行小工具",
-        subcommands = {OrganizeCommand.class, UndoCommand.class, ConfigCommand.class})
+        subcommands = {OrganizeCommand.class, UndoCommand.class, ConfigCommand.class,
+                TrayCommand.class, AutostartCommand.class})
 public class Main implements Runnable {
 
     /** 正常结束 */
